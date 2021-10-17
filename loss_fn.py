@@ -109,14 +109,14 @@ class DMPLoss(nn.Module):
     def forward(self, endpoints):
         rgb_stack_ = torch.cat(endpoints['rgb'], dim=0)
         flipped_rgb_stack_ = torch.cat(endpoints['rgb'][::-1], dim=0)
-        predicted_depth_stack_ = torch.cat(
-                    endpoints['predicted_depth'], dim=0)
-        flipped_predicted_depth_stack_ = torch.cat(
-                endpoints['predicted_depth'][::-1], dim=0)
-        residual_translation_ = torch.cat(
-            endpoints['residual_translation'], dim=0)
-        flipped_residual_translation_ = torch.cat(
-            endpoints['residual_translation'][::-1], dim=0)
+        predicted_depth_stack_ = torch.cat(endpoints['predicted_depth'], dim=0)
+        
+        flipped_predicted_depth_stack_ = torch.cat(endpoints['predicted_depth'][::-1], dim=0)
+        
+        residual_translation_ = torch.cat(endpoints['residual_translation'], dim=0)
+        
+        flipped_residual_translation_ = torch.cat(endpoints['residual_translation'][::-1], dim=0)
+        
         intrinsics_mat_ = torch.cat(endpoints['intrinsics_mat'], dim=0)
 
         _losses = self._reinitialise_losses(rgb_stack_.device)
@@ -125,24 +125,23 @@ class DMPLoss(nn.Module):
         # Create pyramids from each stack to support multi-scale training.
         num_scales = self.default_params['num_scales']
         rgb_pyramid = _get_pyramid(rgb_stack_, num_scales=num_scales)
-        flipped_rgb_pyramid = _get_pyramid(
-            flipped_rgb_stack_, num_scales=num_scales)
-        predicted_depth_pyramid = _get_pyramid(
-            predicted_depth_stack_, num_scales=num_scales)
-        flipped_predicted_depth_pyramid = _get_pyramid(
-            flipped_predicted_depth_stack_, num_scales=num_scales)
-        residual_translation_pyramid = _get_pyramid(
-            residual_translation_, num_scales=num_scales)
-        flipped_residual_translation_pyramid = _get_pyramid(
-            flipped_residual_translation_, num_scales=num_scales)
-        intrinsics_mat_pyramid = _get_intrinsics_mat_pyramid(
-            intrinsics_mat_, num_scales=num_scales)
+        
+        flipped_rgb_pyramid = _get_pyramid(flipped_rgb_stack_, num_scales=num_scales)
+        
+        predicted_depth_pyramid = _get_pyramid(predicted_depth_stack_, num_scales=num_scales)
+        
+        flipped_predicted_depth_pyramid = _get_pyramid(flipped_predicted_depth_stack_, num_scales=num_scales)
+        
+        residual_translation_pyramid = _get_pyramid(residual_translation_, num_scales=num_scales)
+        
+        flipped_residual_translation_pyramid = _get_pyramid(flipped_residual_translation_, num_scales=num_scales)
+        
+        intrinsics_mat_pyramid = _get_intrinsics_mat_pyramid(intrinsics_mat_, num_scales=num_scales)
 
         validity_mask_ = endpoints.get('validity_mask')
         if validity_mask_ is not None:
             validity_mask_ = torch.cat(validity_mask_, dim=0)
-            validity_mask_pyramid = _get_pyramid(
-                validity_mask_, num_scales, _min_pool2d)
+            validity_mask_pyramid = _get_pyramid(validity_mask_, num_scales, _min_pool2d)
         else:
             validity_mask_pyramid = [None] * num_scales
 
@@ -184,18 +183,14 @@ class DMPLoss(nn.Module):
 
             _losses['depth_variance'] = scale_w * 1.0 / depth_var
 
-            _losses['depth_smoothing'] = _losses['depth_smoothing'] +(
-                scale_w *
-                regularizers.joint_bilateral_smoothing(disp / mean_disp, rgb_stack))
+            _losses['depth_smoothing'] = _losses['depth_smoothing'] + (scale_w * regularizers.joint_bilateral_smoothing(disp / mean_disp, rgb_stack))
 
             self._output_endpoints['disparity'] = disp
 
             flipped_rgb_stack = flipped_rgb_pyramid[s]
 
-            background_translation = torch.cat(
-                endpoints['background_translation'], dim=0)
-            flipped_background_translation = torch.cat(
-                endpoints['background_translation'][::-1], dim=0)
+            background_translation = torch.cat(endpoints['background_translation'], dim=0)
+            flipped_background_translation = torch.cat(endpoints['background_translation'][::-1], dim=0)
             residual_translation = residual_translation_pyramid[s]
             flipped_residual_translation = flipped_residual_translation_pyramid[s]
             
@@ -206,22 +201,21 @@ class DMPLoss(nn.Module):
                 flipped_residual_translation /= mean_depth
             
             translation = torch.add(residual_translation, background_translation.view(-1, 1, 1, 3))
-            flipped_translation = (
-                flipped_residual_translation + flipped_background_translation.view(-1, 1, 1,3))
+            flipped_translation = (flipped_residual_translation + flipped_background_translation.view(-1, 1, 1,3))
 
             rotation = torch.cat(endpoints['rotation'], dim=0)
             flipped_rotation = torch.cat(endpoints['rotation'][::-1], dim=0)
             intrinsics_mat = intrinsics_mat_pyramid[s]
-            intrinsics_mat_inv = intrinsics_utils.invert_intrinsics_matrix(
-                intrinsics_mat)
+            intrinsics_mat_inv = intrinsics_utils.invert_intrinsics_matrix(intrinsics_mat)
             
             validity_mask = validity_mask_pyramid[s]
 
-            transformed_depth = transform_depth_map.using_motion_vector(
-                torch.squeeze(predicted_depth_stack, dim=1), translation, rotation,
-                intrinsics_mat, intrinsics_mat_inv)
-            flipped_predicted_depth_stack = torch.squeeze(
-                flipped_predicted_depth_stack, dim=-1)
+            transformed_depth = transform_depth_map.using_motion_vector(torch.squeeze(predicted_depth_stack, dim=1),
+                                                                        translation,
+                                                                        rotation,
+                                                                        intrinsics_mat,
+                                                                        intrinsics_mat_inv)
+            flipped_predicted_depth_stack = torch.squeeze(flipped_predicted_depth_stack, dim=-1)
             if self.default_params['target_depth_stop_gradient']:
                 flipped_predicted_depth_stack = flipped_predicted_depth_stack.detach()
             # The first and second halves of the batch not contain Frame1's and
@@ -239,30 +233,25 @@ class DMPLoss(nn.Module):
                     flipped_translation,
                     validity_mask=validity_mask))
 
-            normalized_trans = regularizers.normalize_motion_map(
-                residual_translation, translation)
+            normalized_trans = regularizers.normalize_motion_map(residual_translation, translation)
+            
             _losses['motion_smoothing'] = _losses['motion_smoothing'] + \
-                scale_w * regularizers.l1smoothness(
-                normalized_trans, self.default_weights['motion_drift'] == 0)
+                scale_w * regularizers.l1smoothness(normalized_trans, self.default_weights['motion_drift'] == 0)
+            
             _losses['motion_drift'] = _losses['motion_drift'] + \
-                scale_w * regularizers.sqrt_sparsity(
-                normalized_trans)
-            _losses['depth_consistency'] = _losses['depth_consistency'] + (
-                scale_w * loss_endpoints['depth_error'])
-            _losses['rgb_consistency'] = _losses['rgb_consistency'] + \
-                                    scale_w * loss_endpoints['rgb_error']
-            _losses['ssim'] = _losses['ssim'] + \
-                        scale_w * 0.5 * loss_endpoints['ssim_error']
+                scale_w * regularizers.sqrt_sparsity(normalized_trans)
+            
+            _losses['depth_consistency'] = _losses['depth_consistency'] + (scale_w * loss_endpoints['depth_error'])
+            
+            _losses['rgb_consistency'] = _losses['rgb_consistency'] + scale_w * loss_endpoints['rgb_error']
+            
+            _losses['ssim'] = _losses['ssim'] + scale_w * 0.5 * loss_endpoints['ssim_error']
 
-            _losses['rotation_cycle_consistency'] = \
-                _losses['rotation_cycle_consistency'] + (
-                scale_w * loss_endpoints['rotation_error'])
-            _losses['translation_cycle_consistency'] = \
-                _losses['translation_cycle_consistency'] + (
-                scale_w * loss_endpoints['translation_error'])
+            _losses['rotation_cycle_consistency'] = _losses['rotation_cycle_consistency'] + (scale_w * loss_endpoints['rotation_error'])
+            
+            _losses['translation_cycle_consistency'] = _losses['translation_cycle_consistency'] + (scale_w * loss_endpoints['translation_error'])
 
-            self._output_endpoints['depth_proximity_weight'] = loss_endpoints[
-                'depth_proximity_weight']
+            self._output_endpoints['depth_proximity_weight'] = loss_endpoints['depth_proximity_weight']
             self._output_endpoints['trans'] = translation
             self._output_endpoints['inv_trans'] = flipped_translation
 

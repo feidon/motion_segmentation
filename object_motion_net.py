@@ -173,8 +173,7 @@ class MotionVectorNet(nn.Module):
         return x_a
     
     def _mask(self, x):
-        sq_x = torch.sqrt(torch.sum(x**2,
-                                 dim=1, keepdim=True))
+        sq_x = torch.sqrt(torch.sum(x**2, dim=1, keepdim=True))
         mean_sq_x = torch.mean(sq_x, dim=(0, 2, 3))
         mask_x = (sq_x > mean_sq_x).type(x.dtype)
         x = x * mask_x
@@ -214,6 +213,7 @@ class MotionVectorNet(nn.Module):
         rotation *= rot_scale
         if self.auto_mask:
             residual_translation = self._mask(residual_translation)
+        # print(residual_translation.shape)
         image_height, image_width = x.shape[2], x.shape[3]
         if self.intrinsics:
             intrinsic_mat = self.intrinsics_mat.repeat(batch_size, 1, 1).to(x.device)
