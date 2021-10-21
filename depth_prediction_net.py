@@ -58,11 +58,8 @@ def concat_and_pad(decoder_layer, encoder_layer):
     return F.pad(concat, (1, 1, 1, 1), mode='reflect')
 
 class DispEncoder(nn.Module):
-    def __init__(self, alpha=10, beta=0.01):
+    def __init__(self):
         super(DispEncoder, self).__init__()
-
-        self.alpha = alpha
-        self.beta = beta
 
         conv_planes = [64, 64, 128, 256, 512]
         self.conv1 = nn.Sequential(conv3x3(3, conv_planes[0], 7, 2, 3),
@@ -74,11 +71,11 @@ class DispEncoder(nn.Module):
         self.conv4 = downsample_conv(conv_planes[2], conv_planes[3], 2)
         self.conv5 = downsample_conv(conv_planes[3], conv_planes[4], 2)
         
-        self.fc_layers = nn.Sequential(nn.Linear(256 * 8 * 8, 256),
+        self.fc_layers = nn.Sequential(nn.Linear(25088, 16384),
                                        nn.ReLU(),
-                                       nn.Linear(256, 256),
+                                       nn.Linear(16384, 16384),
                                        nn.ReLU(),
-                                       nn.Linear(256, 11))
+                                       nn.Linear(16384, 10450))
     def forward(self, x):
         out_conv1 = self.conv1(x)
         out_conv1_maxpool = self.conv1_maxpool(out_conv1)
@@ -87,27 +84,24 @@ class DispEncoder(nn.Module):
         out_conv4 = self.conv4(out_conv3)
         out_conv5 = self.conv5(out_conv4)
         x = out_conv5.flatten(1)
-        print(x.shape)
         x = self.fc_layers(x)
-        return x, out_conv5, (out_conv4, out_conv3, out_conv2, out_conv1)
+        return x
 
 class DispNetS(nn.Module):
 
-    def __init__(self, alpha=10, beta=0.01):
+    def __init__(self, encoder, alpha=10, beta=0.01):
         super(DispNetS, self).__init__()
 
         self.alpha = alpha
         self.beta = beta
 
         conv_planes = [64, 64, 128, 256, 512]
-        self.conv1 = nn.Sequential(conv3x3(3, conv_planes[0], 7, 2, 3),
-                                   nn.BatchNorm2d(conv_planes[0]),
-                                   nn.ReLU(inplace=True))
-        self.conv1_maxpool = nn.MaxPool2d(3, 2, 1)
-        self.conv2 = downsample_conv(conv_planes[0], conv_planes[1])
-        self.conv3 = downsample_conv(conv_planes[1], conv_planes[2], 2)
-        self.conv4 = downsample_conv(conv_planes[2], conv_planes[3], 2)
-        self.conv5 = downsample_conv(conv_planes[3], conv_planes[4], 2)
+        self.conv1 = encoder.conv1
+        self.conv1_maxpool = encoder.conv1_maxpool
+        self.conv2 = encoder.conv2
+        self.conv3 = encoder.conv3
+        self.conv4 = encoder.conv4
+        self.conv5 = encoder.conv5
 
         upconv_planes = [16, 32, 64, 128, 256]
         self.upconv5 = upconv(conv_planes[4],   upconv_planes[4])
