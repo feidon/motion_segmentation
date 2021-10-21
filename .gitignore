@@ -1,0 +1,9 @@
+train_log/*
+
+images/*
+
+images/video/*
+
+images/video
+
+checkpoints/*
